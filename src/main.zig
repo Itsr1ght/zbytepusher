@@ -1,17 +1,11 @@
-pub fn main() !void {
-    rl.initWindow(1080, 720, "Hello World");
-    defer rl.closeWindow();
+// window size
+const WIDTH: u8 = 256;
+const HEIGHT: u8 = 256;
 
-    rl.setTargetFPS(60);
+// memory
+var memory: u8[0 .. 16 * 1024] = undefined;
 
-    while (!rl.windowShouldClose()) {
-        rl.beginDrawing();
-        defer rl.endDrawing();
-
-        rl.clearBackground(.gray);
-    }
-    std.debug.print("Hello Raylib", .{});
-}
+pub fn main() !void {}
 
 const std = @import("std");
 const rl = @import("raylib");

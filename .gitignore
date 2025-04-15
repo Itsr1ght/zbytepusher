@@ -1,4 +1,6 @@
 # directories
-
 .zig-cache
 zig-out
+
+# removing all bytepusher binaries
+*.bp
