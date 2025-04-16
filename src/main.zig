@@ -1,3 +1,12 @@
+//command line flags
+const Flags = struct {
+    pub const description =
+        \\Simple BytePusher VM created using zig 
+        \\use --file command to choose the file
+    ;
+    file: []const u8,
+};
+
 // window config
 const WIDTH = 256;
 const HEIGHT = 256;
@@ -37,7 +46,19 @@ fn draw() void {
     defer rl.endDrawing();
 }
 
-pub fn main() !void {
+pub fn main() !u8 {
+    const args = try std.process.argsAlloc(std.heap.smp_allocator);
+    defer std.process.argsFree(std.heap.smp_allocator, args);
+
+    const options = flags.parseOrExit(args, "zbytepusher", Flags, .{});
+
+    const file = cwd.openFile(options.file, .{ .mode = .read_only }) catch |err| {
+        std.debug.print("found error while opening file : {}", .{err});
+        std.posix.exit(0);
+    };
+    std.debug.print("{any}", .{file});
+
+    std.posix.exit(0);
     rl.initWindow(WIDTH, HEIGHT, TITLE);
     defer rl.closeWindow();
 
@@ -47,7 +68,10 @@ pub fn main() !void {
         update();
         draw();
     }
+    return 0;
 }
 
 const std = @import("std");
+const cwd = std.fs.cwd();
+const flags = @import("flags");
 const rl = @import("raylib");

@@ -22,6 +22,13 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("raylib", raylib);
     exe.root_module.addImport("raygui", raygui);
 
+    const flags_dep = b.dependency("flags", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.root_module.addImport("flags", flags_dep.module("flags"));
+
     const run_cmd = b.addRunArtifact(exe);
 
     run_cmd.step.dependOn(b.getInstallStep());
