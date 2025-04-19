@@ -47,11 +47,12 @@ fn draw() void {
 }
 
 pub fn main() !u8 {
+    const cwd = std.fs.cwd();
+
     const args = try std.process.argsAlloc(std.heap.smp_allocator);
     defer std.process.argsFree(std.heap.smp_allocator, args);
 
     const options = flags.parseOrExit(args, "zbytepusher", Flags, .{});
-
     const file = cwd.openFile(options.file, .{ .mode = .read_only }) catch |err| {
         std.debug.print("found error while opening file : {}", .{err});
         std.posix.exit(0);
@@ -72,6 +73,5 @@ pub fn main() !u8 {
 }
 
 const std = @import("std");
-const cwd = std.fs.cwd();
 const flags = @import("flags");
 const rl = @import("raylib");
