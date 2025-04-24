@@ -26,6 +26,31 @@ var videoBuff: [VIDEO_BUFF_SIZE]u8 = undefined;
 
 const color_map = initColorMap();
 
+const CPU = struct {
+    program_counter: u32,
+    memory: [MEMORY_SIZE]u8,
+
+    fn loadRom(location: []const u8) void {
+        _ = location;
+    }
+    fn readByte(location: u32) void {
+        _ = location;
+    }
+
+    fn readDisplayMemory(location: u32) void {
+        _ = location;
+    }
+
+    fn resetProgramCounter() void {}
+
+    fn step() void {}
+
+    fn write(location: u32, data: u8) void {
+        _ = location;
+        _ = data;
+    }
+};
+
 fn initColorMap() [256]rl.Color {
     var c: [256]rl.Color = undefined;
     for (0..6) |r| for (0..6) |g| for (0..6) |b| {
