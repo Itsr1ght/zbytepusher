@@ -11,7 +11,7 @@ const Flags = struct {
 const WIDTH = 256;
 const HEIGHT = 256;
 const VIDEO_BUFF_SIZE = WIDTH * HEIGHT;
-const TITLE: [:0]const u8 = "Hello BytePusher";
+const TITLE: []const u8 = "Hello BytePusher";
 const FPS = 60;
 
 // VM config
