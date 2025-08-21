@@ -6,7 +6,7 @@
     .dependencies = .{
         .raylib_zig = .{
             .url = "git+https://github.com/Not-Nik/raylib-zig#devel",
-            .hash = "raylib_zig-5.6.0-dev-KE8REKAqBQAQugfCOjYYVRFOi7iaEJK1EMDcRUq8AOm2",
+            .hash = "raylib_zig-5.6.0-dev-KE8REPE1BQChb1aqFIBZFfA6gyqq8mpQQ3it3g5xSGuJ",
         },
         .flags = .{
             .url = "git+https://github.com/n0s4/flags#0e2491d8e6d2be38dc0c2ce8e103469886e468bb",

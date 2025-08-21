@@ -8,6 +8,11 @@ const Flags = struct {
     file: []const u8,
 };
 
+fn handleArgs(args: [][:0]u8) Flags {
+    const options = flags.parseOrExit(args, "zbytepusher", Flags, .{});
+    return options;
+}
+
 
 fn update() void {}
 
@@ -16,13 +21,17 @@ fn draw() void {}
 pub fn main() u8 {
     const cwd = std.fs.cwd();
 
-    const args = std.process.argsAlloc(std.heap.smp_allocator) catch |err| {
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+    const args = std.process.argsAlloc(allocator) catch |err| {
         std.debug.print("ERROR : found error while allocating argument : {}", .{err});
         std.posix.exit(1);
     };
-    defer std.process.argsFree(std.heap.smp_allocator, args);
+    defer std.process.argsFree(allocator, args);
 
-    const options = flags.parseOrExit(args, "zbytepusher", Flags, .{});
+    const options = handleArgs(args);
     const file = cwd.openFile(options.file, .{ .mode = .read_only }) catch |err| {
         std.debug.print("ERROR : found error while opening file : {}", .{err});
         std.posix.exit(1);
