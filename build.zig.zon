@@ -4,13 +4,13 @@
     .fingerprint = 0xac539e16bea8169e,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
-        .raylib_zig = .{
-            .url = "git+https://github.com/Not-Nik/raylib-zig#devel",
-            .hash = "raylib_zig-5.6.0-dev-KE8REPE1BQChb1aqFIBZFfA6gyqq8mpQQ3it3g5xSGuJ",
-        },
         .flags = .{
             .url = "git+https://github.com/n0s4/flags#0e2491d8e6d2be38dc0c2ce8e103469886e468bb",
             .hash = "flags-0.10.0-a_9h3kR2AABNAfaPGRyOOGmWsfv12Hk6JQPTX4MM446s",
+        },
+        .raylib_zig = .{
+            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=zig-0.14#57a8a21b486af47d62cb8ce39a0c7902019a86d2",
+            .hash = "raylib_zig-5.6.0-dev-KE8RELUtBQD9ynf9BONdwukHlR4Ib8k_hZZUkqUPO7uJ",
         },
     },
     .paths = .{
