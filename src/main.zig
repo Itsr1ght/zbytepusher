@@ -36,6 +36,7 @@ const Cpu = struct {
 
         const stat = try rom.stat();
         const buffer = try self.allocator.alloc(u8, @as(usize, @intCast(stat.size)));
+        defer self.allocator.free(buffer);
         _ = try rom.readAll(buffer);
         for(buffer, 0..buffer.len) |buff, i| {
             self.memory[i] = buff;
@@ -83,16 +84,40 @@ const keyboard = struct {
 
 };
 
-const display = struct {
+const Display = struct {
+    
+    const Self = @This();
+    is_running: bool = true,
+    
+
+    fn init() Self {
+        rl.initWindow(512, 512, "BytePusher developed in Zig!");
+        rl.setTargetFPS(60);
+        return Self{};
+    }
+
+    fn update(self: *Self) void {
+        while (!rl.windowShouldClose() and self.is_running) {
+
+            rl.beginDrawing();
+
+                rl.clearBackground(.gray);
+
+            rl.endDrawing();
+
+            if(rl.isKeyDown(.escape)) self.is_running = false;
+        }
+    }
+
+    fn deinit(_: Self) void {
+        rl.closeWindow();
+    }
+
 
 };
 
 const keyData: [0x02]u8 = .{0} ** 0x02;
 
-
-fn update() void {}
-
-fn draw() void {}
 
 pub fn main() u8 {
     var debug_allocator = std.heap.DebugAllocator(.{}).init;
@@ -118,19 +143,16 @@ pub fn main() u8 {
 
     defer cpu.deinit();
 
+    var display = Display.init();
+    defer display.deinit();
+
+    display.update();
+
     cpu.loadRom(options.file) catch |err| {
         std.debug.print("found error loading ROM : {any}", .{err});
         return 1;
     };
 
-    std.debug.print("{any}", .{cpu.programCounter});
-
-    std.posix.exit(0);
-    rl.setTargetFPS(60);
-    while (!rl.windowShouldClose()) {
-        update();
-        draw();
-    }
     return 0;
 }
 
