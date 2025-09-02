@@ -13,30 +13,117 @@ fn handleArgs(args: [][:0]u8) Flags {
     return options;
 }
 
+const Cpu = struct {
+    allocator: std.mem.Allocator,
+    memory: []u8,
+    programCounter: u32,
+
+    const Self = @This();
+    
+    fn init(allocator: std.mem.Allocator) !Self {
+        const arr = try allocator.alloc(u8, 0x100000);
+        @memset(arr, 0);
+        return .{
+            .allocator = allocator,
+            .memory = arr,
+            .programCounter = 0
+        };
+    }
+
+    fn loadRom(self: *Self, location: []const u8) !void {
+        var rom = try std.fs.cwd().openFile(location, .{});
+        defer rom.close();
+
+        const stat = try rom.stat();
+        const buffer = try self.allocator.alloc(u8, @as(usize, @intCast(stat.size)));
+        _ = try rom.readAll(buffer);
+        for(buffer, 0..buffer.len) |buff, i| {
+            self.memory[i] = buff;
+        }
+    }
+
+    fn deinit(self: *Self) void {
+        self.allocator.free(self.memory);
+    }
+    
+    fn read(self: *Self, location: usize) u8 {
+        return self.memory[location];
+    }
+
+    fn write(self: *Self, location: usize, data: u8) void {
+        if (location < self.memory.len) {
+            self.memory[location] = data;
+        }
+    }
+
+    fn step(self: *Self) void {
+        const AAA = self.read(self.programCounter) << 0x10 | self.read(self.programCounter + 0x01) << 0x08 | self.read(self.programCounter + 0x02);
+        const BBB = self.read(self.programCounter + 0x03 ) << 0x10 | self.read(self.programCounter + 0x04) << 0x08 | self.read(self.programCounter + 0x05);
+        const CCC = self.read(self.programCounter + 0x06 ) << 0x10 | self.read(self.programCounter + 0x07) << 0x08 | self.read(self.programCounter + 0x08);
+        self.write(BBB, self.read(AAA));
+        self.programCounter = CCC;
+    }
+
+    fn resetProgramCounter(self: *Self) void {
+        self.programCounter = @as(
+            u32, 
+            (@as(u32, self.read(2)) << 0x10) |
+            (@as(u32, self.read(3)) << 0x08 ) |
+            (@as(u32, self.read(4)))
+        );
+    }
+
+    fn copyDisplayMemory(self: *Self, location: u8) []u8 {
+        return self.memory[location..];
+    }
+
+};
+
+const keyboard = struct {
+
+};
+
+const display = struct {
+
+};
+
+const keyData: [0x02]u8 = .{0} ** 0x02;
+
 
 fn update() void {}
 
 fn draw() void {}
 
 pub fn main() u8 {
-    const cwd = std.fs.cwd();
+    var debug_allocator = std.heap.DebugAllocator(.{}).init;
+    const allocator = debug_allocator.allocator();
+    defer {
+        if( debug_allocator.deinit() == .leak ){
+            std.debug.print("dripping\n", .{});
+        }
+    }
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
-    defer arena.deinit();
-
-    const allocator = arena.allocator();
     const args = std.process.argsAlloc(allocator) catch |err| {
         std.debug.print("ERROR : found error while allocating argument : {}", .{err});
-        std.posix.exit(1);
+        return 1;
     };
     defer std.process.argsFree(allocator, args);
 
     const options = handleArgs(args);
-    const file = cwd.openFile(options.file, .{ .mode = .read_only }) catch |err| {
-        std.debug.print("ERROR : found error while opening file : {}", .{err});
-        std.posix.exit(1);
+
+    var cpu = Cpu.init(allocator) catch |err| {
+        std.debug.print("found error CPU initializing : {any}", .{err});
+        return 1;
     };
-    std.debug.print("{any}", .{file});
+
+    defer cpu.deinit();
+
+    cpu.loadRom(options.file) catch |err| {
+        std.debug.print("found error loading ROM : {any}", .{err});
+        return 1;
+    };
+
+    std.debug.print("{any}", .{cpu.programCounter});
 
     std.posix.exit(0);
     rl.setTargetFPS(60);
