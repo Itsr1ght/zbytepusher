@@ -88,28 +88,71 @@ const Display = struct {
     
     const Self = @This();
     is_running: bool = true,
+    palette: [256]rl.Color,
+    pixel_array: []rl.Color,
+    img: rl.Image,
+    texture: rl.Texture2D,
     
 
-    fn init() Self {
-        rl.initWindow(512, 512, "BytePusher developed in Zig!");
+    fn init() !Self {
+        rl.initWindow(512, 512, "BytePusher build in Zig!");
         rl.setTargetFPS(60);
-        return Self{};
+        var index: u32 = 0;
+        const step: u8 = 0x33;
+
+        const image = rl.genImageColor(256, 256, .black);
+        const pixel = @as([*]rl.Color, @ptrCast(image.data))[0..@as(usize, @intCast(image.width)) * @as(usize, @intCast(image.height))];
+
+        var palette: [256]rl.Color = undefined;
+
+        var red: u16 = 0;
+        while (red < 256) : (red += step) {
+            var green: u16 = 0;
+            while (green < 256) : (green += step) {
+                var blue: u16 = 0;
+                while (blue < 256) : (blue += step) {
+                    palette[index] = rl.Color{
+                        .r = @as(u8, @intCast(red)),
+                        .g = @as(u8, @intCast(green)) ,
+                        .b = @as(u8, @intCast(blue)) ,
+                        .a = 255};
+                    index += 1;
+                }
+            }
+        }
+
+        return Self{
+            .palette = palette,
+            .img = image,
+            .pixel_array = pixel,
+            .texture = try rl.loadTextureFromImage(image),
+        };
     }
 
-    fn update(self: *Self) void {
+    fn renderFrame(self: *Self, data: []u8) void {
+        for(0..256) |y| {
+            for(0..256) |x| {
+               self.pixel_array[x][y] = self.palette[data[(y * 256) + x]];
+            }
+        }
+    }
+
+    fn update(self: *Self) !void {
         while (!rl.windowShouldClose() and self.is_running) {
 
             rl.beginDrawing();
 
-                rl.clearBackground(.gray);
-
+                self.texture = try rl.loadTextureFromImage(self.img);
+                defer rl.unloadTexture(self.texture);
+                rl.drawTexture(self.texture, 100, 100, .white);
+            
             rl.endDrawing();
 
             if(rl.isKeyDown(.escape)) self.is_running = false;
         }
     }
 
-    fn deinit(_: Self) void {
+    fn deinit(_ : *Self) void {
         rl.closeWindow();
     }
 
@@ -143,10 +186,16 @@ pub fn main() u8 {
 
     defer cpu.deinit();
 
-    var display = Display.init();
+    var display = Display.init() catch |err| {
+        std.debug.print("found error while initializing display : {any}", .{err});
+        return 1;
+    };
     defer display.deinit();
 
-    display.update();
+    display.update() catch |err| {
+        std.debug.print("find error while running {any}", .{err});
+        return 1;
+    };
 
     cpu.loadRom(options.file) catch |err| {
         std.debug.print("found error loading ROM : {any}", .{err});
