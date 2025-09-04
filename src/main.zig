@@ -80,8 +80,73 @@ const Cpu = struct {
 
 };
 
-const keyboard = struct {
 
+const KeyMap = struct {
+    key: rl.KeyboardKey,
+    val: u8
+};
+
+const Keyboard = struct {
+
+    const keyMap = [_]KeyMap{
+        .{ .key = .one ,   .val = 0x1 },
+        .{ .key = .two,    .val = 0x2 },
+        .{ .key = .three , .val = 0x3 },
+        .{ .key = .four,   .val = 0xC },
+        .{ .key = .q,      .val = 0x4 },
+        .{ .key = .w,      .val = 0x5 },
+        .{ .key = .e,      .val = 0x6 },
+        .{ .key = .r,      .val = 0xD },
+        .{ .key = .a,      .val = 0x7 },
+        .{ .key = .s,      .val = 0x8 },
+        .{ .key = .d,      .val = 0x9 },
+        .{ .key = .f,      .val = 0xE },
+        .{ .key = .z,      .val = 0xA },
+        .{ .key = .x,      .val = 0x0 },
+        .{ .key = .c,      .val = 0xB },
+        .{ .key = .v,      .val = 0xF },
+    };
+
+    keys: [0x10]bool = .{false} ** 0x10,
+
+    const Self = @This();
+
+    fn init() Self {
+        return Self{};
+    } 
+
+    fn findKeyIndex(k: rl.KeyboardKey) ?usize {
+        
+        for (keyMap, 0..) |entry, i| {
+            if (entry.key == k) return i;
+        }
+
+        return null;
+    }
+
+    fn getKeys(self: *Self) [0x10]bool {
+    
+        @memset(&self.keys, false);
+
+        if (rl.isKeyDown(.escape)) {
+            std.process.exit(0);
+        } 
+        
+        for (keyMap) |key| {
+            if (rl.isKeyDown(key.key)){
+                self.keys[findKeyIndex(key.key).?] = true;
+            }
+            if (rl.isKeyUp(key.key)) {
+                self.keys[findKeyIndex(key.key).?] = false;
+            }
+        }
+
+        return self.keys;
+    }
+};
+
+const Spu = struct {
+    a:u8 = 0x0,
 };
 
 const Display = struct {
@@ -97,6 +162,7 @@ const Display = struct {
     fn init() !Self {
         rl.initWindow(512, 512, "BytePusher build in Zig!");
         rl.setTargetFPS(60);
+        rl.setTraceLogLevel(.none);
         var index: u32 = 0;
         const step: u8 = 0x33;
 
@@ -185,6 +251,10 @@ pub fn main() u8 {
     };
 
     defer cpu.deinit();
+
+    var keyboard = Keyboard.init();
+    const key = keyboard.getKeys();
+    std.debug.print("{any}", .{key});
 
     var display = Display.init() catch |err| {
         std.debug.print("found error while initializing display : {any}", .{err});
