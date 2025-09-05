@@ -4,3 +4,4 @@ zig-out
 
 # removing all bytepusher binaries
 *.bp
+*.BytePusher*
