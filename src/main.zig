@@ -58,9 +58,18 @@ const Cpu = struct {
     }
 
     fn step(self: *Self) void {
-        const AAA = self.read(self.programCounter) << 0x10 | self.read(self.programCounter + 0x01) << 0x08 | self.read(self.programCounter + 0x02);
-        const BBB = self.read(self.programCounter + 0x03 ) << 0x10 | self.read(self.programCounter + 0x04) << 0x08 | self.read(self.programCounter + 0x05);
-        const CCC = self.read(self.programCounter + 0x06 ) << 0x10 | self.read(self.programCounter + 0x07) << 0x08 | self.read(self.programCounter + 0x08);
+        const AAA:u32 = 
+            @as(u32, @intCast(self.read(self.programCounter)))         << 0x10 |
+            @as(u32, @intCast(self.read(self.programCounter + 0x01)))  << 0x08 |
+            @as(u32, @intCast(self.read(self.programCounter + 0x02)));
+        const BBB: u32 = 
+            @as(u32, @intCast(self.read(self.programCounter + 0x03 ))) << 0x10 |
+            @as(u32, @intCast(self.read(self.programCounter + 0x04)))  << 0x08 |
+            @as(u32, @intCast(self.read(self.programCounter + 0x05)));
+        const CCC: u32 = 
+            @as(u32, @intCast(self.read(self.programCounter + 0x06 ))) << 0x10 |
+            @as(u32, @intCast(self.read(self.programCounter + 0x07)))  << 0x08 |
+            @as(u32, @intCast(self.read(self.programCounter + 0x08)));
         self.write(BBB, self.read(AAA));
         self.programCounter = CCC;
     }
@@ -74,7 +83,7 @@ const Cpu = struct {
         );
     }
 
-    fn copyDisplayMemory(self: *Self, location: u8) []u8 {
+    fn copyDisplayMemory(self: *Self, location: usize) []u8 {
         return self.memory[location..];
     }
 
@@ -108,11 +117,14 @@ const Keyboard = struct {
     };
 
     keys: [0x10]bool = .{false} ** 0x10,
+    display: *Display,
 
     const Self = @This();
 
-    fn init() Self {
-        return Self{};
+    fn init(display: *Display) Self {
+        return Self{
+            .display = display,
+        };
     } 
 
     fn findKeyIndex(k: rl.KeyboardKey) ?usize {
@@ -128,10 +140,6 @@ const Keyboard = struct {
     
         @memset(&self.keys, false);
 
-        if (rl.isKeyDown(.escape)) {
-            std.process.exit(0);
-        } 
-        
         for (keyMap) |key| {
             if (rl.isKeyDown(key.key)){
                 self.keys[findKeyIndex(key.key).?] = true;
@@ -146,13 +154,53 @@ const Keyboard = struct {
 };
 
 const Spu = struct {
-    a:u8 = 0x0,
+    allocator: std.mem.Allocator,
+    audio_stream: rl.AudioStream,
+    buffer: []i16,
+
+    const Self = @This();
+
+    fn init(allocator: std.mem.Allocator) !Self {
+
+        rl.initAudioDevice();
+
+        const audio_stream = try rl.loadAudioStream(15360, 16, 1);
+        rl.playAudioStream(audio_stream);
+        const buffer = try allocator.alloc(i16, 256);
+
+
+        return .{
+            .allocator = allocator,
+            .audio_stream = audio_stream,
+            .buffer = buffer,
+        };
+    }
+
+    fn updateBuffer(self: *Self, cpu_memory: []u8) void {
+        for(0..256) |i| {
+            const sample_sound = cpu_memory[0xff00 + i];
+            const sample_centered = @as(i16, @intCast(sample_sound)) - 128;
+            self.buffer[i] = sample_centered << 8;
+        }
+    }
+
+    fn play(self: *Self) void {
+        if (rl.isAudioStreamProcessed(self.audio_stream)) {
+            rl.updateAudioStream(self.audio_stream, @as(*const anyopaque, @ptrCast(self.buffer)), 256);
+        }
+    }
+
+    fn deinit(self: *Self) void {
+        rl.stopAudioStream(self.audio_stream);
+        rl.unloadAudioStream(self.audio_stream);
+        self.allocator.free(self.buffer);
+        rl.closeAudioDevice();
+    }
 };
 
 const Display = struct {
     
     const Self = @This();
-    is_running: bool = true,
     palette: [256]rl.Color,
     pixel_array: []rl.Color,
     img: rl.Image,
@@ -195,27 +243,32 @@ const Display = struct {
         };
     }
 
-    fn renderFrame(self: *Self, data: []u8) void {
+    fn renderFrame(self: *Self, data: []u8) !void {
         for(0..256) |y| {
             for(0..256) |x| {
-               self.pixel_array[x][y] = self.palette[data[(y * 256) + x]];
+                const index: usize = y * @as(usize, @intCast(self.img.width)) + x;
+                self.pixel_array[index] = self.palette[data[(y * 256) + x]];
             }
         }
+        try self.update();
     }
 
     fn update(self: *Self) !void {
-        while (!rl.windowShouldClose() and self.is_running) {
+        rl.beginDrawing();
 
-            rl.beginDrawing();
-
-                self.texture = try rl.loadTextureFromImage(self.img);
-                defer rl.unloadTexture(self.texture);
-                rl.drawTexture(self.texture, 100, 100, .white);
-            
-            rl.endDrawing();
-
-            if(rl.isKeyDown(.escape)) self.is_running = false;
-        }
+            self.texture = try rl.loadTextureFromImage(self.img);
+            defer rl.unloadTexture(self.texture);
+            const source: rl.Rectangle = .init(0, 0, 
+                @as(f32, @floatFromInt(self.texture.width)),
+                @as(f32, @floatFromInt(self.texture.height))
+            );
+            const dest: rl.Rectangle = .init(0, 0,
+                @as(f32, @floatFromInt(rl.getScreenWidth())),
+                @as(f32, @floatFromInt(rl.getScreenHeight()))
+            );
+            rl.drawTexturePro(self.texture, source, dest, .{ .x = 0.0, .y = 0.0 }, 0.0, .white);
+        
+        rl.endDrawing();
     }
 
     fn deinit(_ : *Self) void {
@@ -233,38 +286,51 @@ const BytePusher = struct {
     cpu: Cpu,
     keyboard: Keyboard,
     display: Display,
-    keyData: u8[0x02] = .{0} ** 0x02,
+    spu: Spu,
+
+    keyData: [0x02]u8 = .{0} ** 0x02,
+    isRunning: bool = true,
 
     const Self = @This();
 
     fn init(allocator: std.mem.Allocator) !Self {
-        const cpu = Cpu.init(allocator);
-        const keyboard = Keyboard.init();
-        const display = try Display.init();
+        const cpu = try Cpu.init(allocator);
+        var display = try Display.init();
+        const keyboard = Keyboard.init(&display);
+        const spu = try Spu.init(allocator);
 
         return Self {
             .cpu = cpu,
             .keyboard = keyboard,
             .display = display,
+            .spu = spu,
         };
     }
 
-    fn loadRom(self: *Self, location: []const u8) void {
-        self.cpu.loadRom(location);
+    fn deinit(self: *Self) void {
+        self.cpu.deinit();
+        self.spu.deinit();
+        self.display.deinit();
     }
 
-    fn run(self: *Self) void {
+    fn loadRom(self: *Self, location: []const u8) !void {
+        try self.cpu.loadRom(location);
+    }
 
-        while (true) {
+    fn run(self: *Self) !void {
+
+        while (self.isRunning) {
+
+            if (rl.windowShouldClose()) self.isRunning = false;
         
             const keys = self.keyboard.getKeys();
             self.keyData[0] = 0;
             self.keyData[1] = 0;
 
-            for (0..1) |dataIndex| {
-                for (0..7) |keyIndex| {
+            for (0..2) |dataIndex| {
+                for (0..8) |keyIndex| {
                     if (keys[keyIndex + (0x8 * dataIndex)] == true) {
-                        self.keyData[dataIndex] = self.keyData[dataIndex] | (0x1 << (keyIndex));
+                        self.keyData[dataIndex] |= @as(u8, 1) << @as(u3, @intCast(keyIndex));
                     }
                 }
             }
@@ -276,11 +342,16 @@ const BytePusher = struct {
             for(0..0x10000) |_| {
                 self.cpu.step();
             }
-            self.display.renderFrame(self.cpu.copyDisplayMemory(self.cpu.read(0x05) << 0x10));
+
+
+            self.spu.updateBuffer(self.cpu.memory);
+            self.spu.play();
+
+            try self.display.renderFrame(
+                self.cpu.copyDisplayMemory(@as(usize, self.cpu.read(0x05)) << 0x10)
+            );
         }
-        
     }
-    
 };
 
 
@@ -301,30 +372,17 @@ pub fn main() u8 {
 
     const options = handleArgs(args);
 
-    var cpu = Cpu.init(allocator) catch |err| {
-        std.debug.print("found error CPU initializing : {any}", .{err});
+    var bytepusher = BytePusher.init(allocator) catch |err| {
+        std.debug.print("cannot initialize the bytepusher : {any}", .{err});
         return 1;
     };
+    defer bytepusher.deinit();
 
-    defer cpu.deinit();
-
-    var keyboard = Keyboard.init();
-    const key = keyboard.getKeys();
-    std.debug.print("{any}", .{key});
-
-    var display = Display.init() catch |err| {
-        std.debug.print("found error while initializing display : {any}", .{err});
-        return 1;
+    bytepusher.loadRom(options.file) catch |err| {
+        std.debug.print("cannot load the load to the memory : {any}", .{err});
     };
-    defer display.deinit();
-
-    display.update() catch |err| {
-        std.debug.print("find error while running {any}", .{err});
-        return 1;
-    };
-
-    cpu.loadRom(options.file) catch |err| {
-        std.debug.print("found error loading ROM : {any}", .{err});
+    bytepusher.run() catch |err| {
+        std.debug.print("found error while running : {any}", .{err});
         return 1;
     };
 
