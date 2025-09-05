@@ -154,46 +154,54 @@ const Keyboard = struct {
 };
 
 const Spu = struct {
-    allocator: std.mem.Allocator,
+
+    const SAMPLE_RATE = 15360;
+    const FRAME_SAMPLES = 256;
+
     audio_stream: rl.AudioStream,
-    buffer: []i16,
+    buffer: [FRAME_SAMPLES]f32,
 
     const Self = @This();
 
-    fn init(allocator: std.mem.Allocator) !Self {
+    fn init() !Self {
 
         rl.initAudioDevice();
-
-        const audio_stream = try rl.loadAudioStream(15360, 16, 1);
+        rl.setAudioStreamBufferSizeDefault(FRAME_SAMPLES);
+        const audio_stream = try rl.loadAudioStream(SAMPLE_RATE, 32, 1);
         rl.playAudioStream(audio_stream);
-        const buffer = try allocator.alloc(i16, 256);
 
 
         return .{
-            .allocator = allocator,
             .audio_stream = audio_stream,
-            .buffer = buffer,
+            .buffer = std.mem.zeroes([FRAME_SAMPLES]f32),
         };
     }
 
-    fn updateBuffer(self: *Self, cpu_memory: []u8) void {
-        for(0..256) |i| {
-            const sample_sound = cpu_memory[0xff00 + i];
-            const sample_centered = @as(i16, @intCast(sample_sound)) - 128;
-            self.buffer[i] = sample_centered << 8;
-        }
-    }
+    fn play(self: *Self, memory: []u8) void {
 
-    fn play(self: *Self) void {
+        if (memory.len < 9) return;
+
+        const aud_addr = @as(u24, std.mem.readInt(u16, memory[6 .. 6 + 2], .big)) << 8;
+
+        if (aud_addr + FRAME_SAMPLES > memory.len ) return;
+
+        const samples : *[FRAME_SAMPLES]i8 = @ptrCast(memory[aud_addr..]);
+        var out_samples: [FRAME_SAMPLES][2]i16 = undefined;
+        
         if (rl.isAudioStreamProcessed(self.audio_stream)) {
-            rl.updateAudioStream(self.audio_stream, @as(*const anyopaque, @ptrCast(self.buffer)), 256);
+            
+            for (samples, &out_samples) |sample, *stereo| {
+                const s = @as(i16, sample) << 8;
+                stereo[0], stereo[1] = .{s, s};
+            }
+            
+            rl.updateAudioStream(self.audio_stream, &out_samples, FRAME_SAMPLES);
         }
     }
 
     fn deinit(self: *Self) void {
         rl.stopAudioStream(self.audio_stream);
         rl.unloadAudioStream(self.audio_stream);
-        self.allocator.free(self.buffer);
         rl.closeAudioDevice();
     }
 };
@@ -297,7 +305,7 @@ const BytePusher = struct {
         const cpu = try Cpu.init(allocator);
         var display = try Display.init();
         const keyboard = Keyboard.init(&display);
-        const spu = try Spu.init(allocator);
+        const spu = try Spu.init();
 
         return Self {
             .cpu = cpu,
@@ -343,9 +351,7 @@ const BytePusher = struct {
                 self.cpu.step();
             }
 
-
-            self.spu.updateBuffer(self.cpu.memory);
-            self.spu.play();
+            self.spu.play(self.cpu.memory);
 
             try self.display.renderFrame(
                 self.cpu.copyDisplayMemory(@as(usize, self.cpu.read(0x05)) << 0x10)
