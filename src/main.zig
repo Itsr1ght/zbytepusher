@@ -228,6 +228,62 @@ const Display = struct {
 const keyData: [0x02]u8 = .{0} ** 0x02;
 
 
+const BytePusher = struct {
+
+    cpu: Cpu,
+    keyboard: Keyboard,
+    display: Display,
+    keyData: u8[0x02] = .{0} ** 0x02,
+
+    const Self = @This();
+
+    fn init(allocator: std.mem.Allocator) !Self {
+        const cpu = Cpu.init(allocator);
+        const keyboard = Keyboard.init();
+        const display = try Display.init();
+
+        return Self {
+            .cpu = cpu,
+            .keyboard = keyboard,
+            .display = display,
+        };
+    }
+
+    fn loadRom(self: *Self, location: []const u8) void {
+        self.cpu.loadRom(location);
+    }
+
+    fn run(self: *Self) void {
+
+        while (true) {
+        
+            const keys = self.keyboard.getKeys();
+            self.keyData[0] = 0;
+            self.keyData[1] = 0;
+
+            for (0..1) |dataIndex| {
+                for (0..7) |keyIndex| {
+                    if (keys[keyIndex + (0x8 * dataIndex)] == true) {
+                        self.keyData[dataIndex] = self.keyData[dataIndex] | (0x1 << (keyIndex));
+                    }
+                }
+            }
+
+            self.cpu.write(0x00, self.keyData[0x1]);
+            self.cpu.write(0x01, self.keyData[0x0]);
+            self.cpu.resetProgramCounter();
+
+            for(0..0x10000) |_| {
+                self.cpu.step();
+            }
+            self.display.renderFrame(self.cpu.copyDisplayMemory(self.cpu.read(0x05) << 0x10));
+        }
+        
+    }
+    
+};
+
+
 pub fn main() u8 {
     var debug_allocator = std.heap.DebugAllocator(.{}).init;
     const allocator = debug_allocator.allocator();
