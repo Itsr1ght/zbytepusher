@@ -153,59 +153,6 @@ const Keyboard = struct {
     }
 };
 
-const Spu = struct {
-
-    const SAMPLE_RATE = 15360;
-    const FRAME_SAMPLES = 256;
-
-    audio_stream: rl.AudioStream,
-    buffer: [FRAME_SAMPLES]f32,
-
-    const Self = @This();
-
-    fn init() !Self {
-
-        rl.initAudioDevice();
-        rl.setAudioStreamBufferSizeDefault(FRAME_SAMPLES);
-        const audio_stream = try rl.loadAudioStream(SAMPLE_RATE, 32, 1);
-        rl.playAudioStream(audio_stream);
-
-
-        return .{
-            .audio_stream = audio_stream,
-            .buffer = std.mem.zeroes([FRAME_SAMPLES]f32),
-        };
-    }
-
-    fn play(self: *Self, memory: []u8) void {
-
-        if (memory.len < 9) return;
-
-        const aud_addr = @as(u24, std.mem.readInt(u16, memory[6 .. 6 + 2], .big)) << 8;
-
-        if (aud_addr + FRAME_SAMPLES > memory.len ) return;
-
-        const samples : *[FRAME_SAMPLES]i8 = @ptrCast(memory[aud_addr..]);
-        var out_samples: [FRAME_SAMPLES][2]i16 = undefined;
-        
-        if (rl.isAudioStreamProcessed(self.audio_stream)) {
-            
-            for (samples, &out_samples) |sample, *stereo| {
-                const s = @as(i16, sample) << 8;
-                stereo[0], stereo[1] = .{s, s};
-            }
-            
-            rl.updateAudioStream(self.audio_stream, &out_samples, FRAME_SAMPLES);
-        }
-    }
-
-    fn deinit(self: *Self) void {
-        rl.stopAudioStream(self.audio_stream);
-        rl.unloadAudioStream(self.audio_stream);
-        rl.closeAudioDevice();
-    }
-};
-
 const Display = struct {
     
     const Self = @This();
@@ -294,7 +241,6 @@ const BytePusher = struct {
     cpu: Cpu,
     keyboard: Keyboard,
     display: Display,
-    spu: Spu,
 
     keyData: [0x02]u8 = .{0} ** 0x02,
     isRunning: bool = true,
@@ -305,19 +251,16 @@ const BytePusher = struct {
         const cpu = try Cpu.init(allocator);
         var display = try Display.init();
         const keyboard = Keyboard.init(&display);
-        const spu = try Spu.init();
 
         return Self {
             .cpu = cpu,
             .keyboard = keyboard,
             .display = display,
-            .spu = spu,
         };
     }
 
     fn deinit(self: *Self) void {
         self.cpu.deinit();
-        self.spu.deinit();
         self.display.deinit();
     }
 
@@ -350,8 +293,6 @@ const BytePusher = struct {
             for(0..0x10000) |_| {
                 self.cpu.step();
             }
-
-            self.spu.play(self.cpu.memory);
 
             try self.display.renderFrame(
                 self.cpu.copyDisplayMemory(@as(usize, self.cpu.read(0x05)) << 0x10)
