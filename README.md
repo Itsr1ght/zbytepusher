@@ -3,5 +3,9 @@ simple BytePusher VM created with zig and raylib
 
 ## Status
 
-* almost complete *
-[ ] 
+ almost complete
+
+- [X] CPU
+- [X] Display
+- [X] Keyboard
+- [X] Audio
