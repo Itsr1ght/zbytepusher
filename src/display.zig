@@ -75,7 +75,7 @@ pub const Display = struct {
         rl.endDrawing();
     }
 
-    fn deinit(_ : *Self) void {
+    pub fn deinit(_ : *Self) void {
         rl.closeWindow();
     }
 
