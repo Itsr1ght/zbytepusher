@@ -24,7 +24,7 @@ pub const cmdLineArgs = struct {
 
     pub fn processArgs(self: *Self) !Flags {
         self.args = try std.process.argsAlloc(self.allocator);
-        const options = try flags.parse(self.args, "zbytepusher", Flags, .{});
+        const options = flags.parse(self.args, "zbytepusher", Flags, .{});
         return options;
     }
 

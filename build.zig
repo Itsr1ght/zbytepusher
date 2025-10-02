@@ -4,7 +4,16 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{ .name = "zbytepusher", .root_source_file = b.path("src/main.zig"), .optimize = optimize, .target = target });
+    const exe_module = b.addModule("zbytepusher", .{
+            .optimize = optimize,
+            .target = target,
+            .root_source_file = b.path("src/main.zig")
+        }
+    );
+
+    const exe = b.addExecutable(
+        .{ .name = "zbytepusher" , .root_module = exe_module }
+    );
 
     b.installArtifact(exe);
 
@@ -39,7 +48,7 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const exe_unit_tests = b.addTest(.{ .root_source_file = b.path("src/main.zig") });
+    const exe_unit_tests = b.addTest(.{ .root_module = exe_module });
     exe_unit_tests.root_module.addImport("raylib", raylib);
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
